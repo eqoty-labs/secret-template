@@ -46,6 +46,8 @@ kotlin {
                 implementation(libs.ktor.client.core)
                 implementation(libs.co.touchlab.kermit)
                 implementation(libs.io.eqoty.secretk.client)
+                implementation(libs.io.eqoty.secretk.deploy.utils)
+                implementation(libs.io.github.luca992.getenv)
             }
         }
         val jvmMain by getting {

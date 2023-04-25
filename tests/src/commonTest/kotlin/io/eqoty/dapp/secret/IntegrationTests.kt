@@ -1,23 +1,20 @@
 package io.eqoty.dapp.secret
 
+import DeployContractUtils
 import co.touchlab.kermit.Logger
+import io.eqoty.cosmwasm.std.types.ContractInfo
 import io.eqoty.dapp.secret.TestGlobals.client
 import io.eqoty.dapp.secret.TestGlobals.contractInfo
 import io.eqoty.dapp.secret.TestGlobals.initTestsSemaphore
 import io.eqoty.dapp.secret.TestGlobals.initializeClient
 import io.eqoty.dapp.secret.TestGlobals.needsInit
 import io.eqoty.dapp.secret.TestGlobals.testnetInfo
-import io.eqoty.dapp.secret.types.ContractInfo
 import io.eqoty.dapp.secret.types.contract.CountResponse
-import io.eqoty.dapp.secret.utils.Constants
-import io.eqoty.dapp.secret.utils.Faucet
-import io.eqoty.dapp.secret.utils.fileSystem
-import io.eqoty.dapp.secret.utils.getEnv
-import io.eqoty.secretk.client.SigningCosmWasmClient
+import io.eqoty.dapp.secret.utils.*
 import io.eqoty.secretk.types.MsgExecuteContract
 import io.eqoty.secretk.types.MsgInstantiateContract
-import io.eqoty.secretk.types.MsgStoreCode
 import io.eqoty.secretk.types.TxOptions
+import io.getenv
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -31,7 +28,7 @@ import kotlin.test.assertEquals
 
 class IntegrationTests {
 
-    private val contractCodePath: Path = getEnv(Constants.CONTRACT_PATH_ENV_NAME)!!.toPath()
+    private val contractCodePath: Path = getenv(Constants.CONTRACT_PATH_ENV_NAME)!!.toPath()
 
     // Initialization procedure
     private suspend fun initializeAndUploadContract() {
@@ -39,7 +36,7 @@ class IntegrationTests {
 
         client = initializeClient(endpoint, testnetInfo.chainId)
 
-        Faucet.fillUp(testnetInfo, client, 100_000_000)
+        BalanceUtils.fillUpFromFaucet(testnetInfo, client, 100_000_000)
 
         val initMsg = """{"count": 4}"""
         val instantiateMsgs = listOf(
@@ -51,71 +48,23 @@ class IntegrationTests {
                 codeHash = null // will be set later
             )
         )
-        contractInfo = storeCodeAndInstantiate(
+        contractInfo = DeployContractUtils.getOrStoreCodeAndInstantiate(
             client,
             contractCodePath,
             instantiateMsgs
-        )
-    }
-
-    private suspend fun storeCodeAndInstantiate(
-        client: SigningCosmWasmClient,
-        codePath: Path,
-        instantiateMsgs: List<MsgInstantiateContract>
-    ): ContractInfo {
-        val accAddress = client.wallet.getAccounts()[0].address
-        val wasmBytes =
-            fileSystem.read(codePath) {
-                readByteArray()
-            }
-
-        val msgs0 = listOf(
-            MsgStoreCode(
-                sender = accAddress,
-                wasmByteCode = wasmBytes.toUByteArray(),
+        ).run {
+            ContractInfo(
+                address,
+                codeInfo.codeHash
             )
-        )
-        var simulate = client.simulate(msgs0)
-        var gasLimit = (simulate.gasUsed.toDouble() * 1.1).toInt()
-        val response = client.execute(
-            msgs0,
-            txOptions = TxOptions(gasLimit = gasLimit)
-        )
-
-        val codeId = response.logs[0].events
-            .find { it.type == "message" }
-            ?.attributes
-            ?.find { it.key == "code_id" }?.value!!
-        Logger.i("codeId:  $codeId")
-
-        val codeInfo = client.getCodeInfoByCodeId(codeId)
-        Logger.i("code hash: ${codeInfo.codeHash}")
-
-        val codeHash = codeInfo.codeHash
-
-        instantiateMsgs.forEach {
-            it.codeId = codeId.toInt()
-            it.codeHash = codeHash
         }
-        simulate = client.simulate(instantiateMsgs)
-        gasLimit = (simulate.gasUsed.toDouble() * 1.1).toInt()
-        val instantiateResponse = client.execute(
-            instantiateMsgs,
-            txOptions = TxOptions(gasLimit = gasLimit)
-        )
-        val contractAddress = instantiateResponse.logs[0].events
-            .find { it.type == "message" }
-            ?.attributes
-            ?.find { it.key == "contract_address" }?.value!!
-        Logger.i("contract address:  $contractAddress")
-        return ContractInfo(codeHash, contractAddress)
     }
 
     private suspend fun queryCount(): CountResponse {
         val contractInfoQuery = """{"get_count": {}}"""
         return Json.decodeFromString(
             client.queryContractSmart(
-                contractInfo.contractAddress,
+                contractInfo.address,
                 contractInfoQuery
             )
         )
@@ -129,7 +78,7 @@ class IntegrationTests {
         val msgs1 = listOf(
             MsgExecuteContract(
                 sender = client.senderAddress,
-                contractAddress = contractInfo.contractAddress,
+                contractAddress = contractInfo.address,
                 codeHash = contractInfo.codeHash,
                 msg = incrementMsg,
             )
