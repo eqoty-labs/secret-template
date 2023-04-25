@@ -85,8 +85,8 @@ fun createEnvVariables(environment: Map<String, Any>): MutableMap<String, Any> {
     if (localPropertiesFile.exists()) {
         properties.load(localPropertiesFile.reader())
     }
-    if (envMap["TESTNET_TYPE"] == null) {
-        envMap["TESTNET_TYPE"] = properties["TESTNET_TYPE"]!!
+    if (envMap["NODE_TYPE"] == null) {
+        envMap["NODE_TYPE"] = properties["NODE_TYPE"]!!
     }
     properties["GITPOD_ID"]?.let {
         envMap.put("GITPOD_ID", it)

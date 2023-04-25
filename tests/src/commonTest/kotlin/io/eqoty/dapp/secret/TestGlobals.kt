@@ -18,7 +18,7 @@ import kotlinx.coroutines.sync.Semaphore
 object TestGlobals {
     lateinit var client: SigningCosmWasmClient
     lateinit var contractInfo: ContractInfo
-    val testnetInfo: NodeInfo = getNode("src/commonTest/resources/config/testnets.json")
+    val testnetInfo: NodeInfo = getNode("src/commonTest/resources/config/nodes.json")
 
     var needsInit = true
     val initTestsSemaphore = Semaphore(1)
